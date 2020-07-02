@@ -6,20 +6,6 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.multiprocessing as mp
-
-from shared_adam import SharedAdam
-from utils import v_wrap, push_and_pull, record
-
-os.environ["OMP_NUM_THREADS"] = "1"
-
-UPDATE_GLOBAL_ITER = 5
-GAMMA = 0.9
-MAX_EP = 3000
-
-N_S = env.observation_space.shape[0]
-N_A = env.action_space.n
-
 
 def layer_init(layers):
     for layer in layers:

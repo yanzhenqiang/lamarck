@@ -1,10 +1,13 @@
 
-import torch.multiprocessing as mp
+import numpy as np
+import torch
+import torch.multiprocessing
+
+from ./model import PolicyNet, EvaluateNet
+
+os.environ["OMP_NUM_THREADS"] = "1"
 
 def es_params(self):
-    """
-    The params that should be trained by ES (all of them)
-    """
     return [(k, v) for k, v in zip(self.state_dict().keys(),
                                     self.state_dict().values())]
 
@@ -18,56 +21,57 @@ def perturb_model(args, model, random_seed, env):
         v += torch.from_numpy(args.sigma*eps).float()
     return new_model
 
+def evolution_net_mutate(self):
+    pass
 
-class Worker(mp.Process):
-    def __init__(self, gnet, opt, global_ep, global_ep_r, res_queue, name):
-        super(Worker, self).__init__()
-        self.name = 'w%02i' % name
-        self.g_ep, self.g_ep_r, self.res_queue = global_ep, global_ep_r, res_queue
-        self.gnet, self.opt = gnet, opt
-        self.lnet = Net(N_S, N_A)           # local network
-        self.env = gym.make('CartPole-v0').unwrapped
+def v_wrap(np_array, dtype=np.float32):
+    if np_array.dtype != dtype:
+        np_array = np_array.astype(dtype)
+    return torch.from_numpy(np_array)
 
-    def run(self):
-        total_step = 1
-        while self.g_ep.value < MAX_EP:
-            s = self.env.reset()
-            buffer_s, buffer_a, buffer_r = [], [], []
-            ep_r = 0.
-            while True:
-                if self.name == 'w00':
-                    self.env.render()
-                a = self.lnet.choose_action(v_wrap(s[None, :]))
-                s_, r, done, _ = self.env.step(a)
-                if done: r = -1
-                ep_r += r
-                buffer_a.append(a)
-                buffer_s.append(s)
-                buffer_r.append(r)
+def generation_forward(policy_net, evolution_net, env, steps):
+    env = gym.make(env).unwrapped
+    opt = torch.optim.Adam(policy_net.parameters(), lr=1e-4, betas=(0.9, 0.999))
+    gamma = 0.9
+    r_sum = 0.
+    while step < steps:
+        s = self.env.reset()
+        buffer_s, buffer_a, buffer_r = [], [], []
+        while True:
+            if self.name == 'TODO':
+                self.env.render()
+            a = self.lnet.choose_action(v_wrap(s[None, :]))
+            s_, r, done, _ = self.env.step(a)
+            if done: r = -1
+            r_sum += r
+            buffer_a.append(a)
+            buffer_s.append(s)
+            buffer_r.append(r)
 
-                if total_step % UPDATE_GLOBAL_ITER == 0 or done:  # update global and assign to local net
-                    # sync
-                    push_and_pull(self.opt, self.lnet, self.gnet, done, s_, buffer_s, buffer_a, buffer_r, GAMMA)
-                    buffer_s, buffer_a, buffer_r = [], [], []
+            if step % 10 == 0 or done:
+                if done:
+                    v_s_ = 0.
+                else:
+                    v_s_ = policy_net.forward(v_wrap(s_[None, :]))[-1].data.numpy()[0, 0]
+                buffer_v_target = []
+                for r in br[::-1]:
+                    v_s_ = r + gamma * v_s_
+                    buffer_v_target.append(v_s_)
+                buffer_v_target.reverse()
 
-                    if done:  # done and print information
-                        record(self.g_ep, self.g_ep_r, ep_r, self.res_queue, self.name)
-                        break
-                s = s_
-                total_step += 1
-        self.res_queue.put(None)
-
-
-opt = SharedAdam(gnet.parameters(), lr=1e-4, betas=(0.92, 0.999))
-global_ep, global_ep_r, res_queue = mp.Value('i', 0), mp.Value('d', 0.), mp.Queue()
-
-workers = [Worker(gnet, opt, global_ep, global_ep_r, res_queue, i) for i in range(mp.cpu_count())]
-
-import collections
-import itertools
-import multiprocessing
-
-from ./model import PolicyNet, EvaluateNet
+                loss = policy_net.loss_func(
+                    v_wrap(np.vstack(bs)),
+                    v_wrap(np.array(ba), dtype=np.int64) if ba[0].dtype == np.int64 else v_wrap(np.vstack(ba)),
+                    v_wrap(np.array(buffer_v_target)[:, None]))
+                opt.zero_grad()
+                loss.backward()
+                opt.step()
+                buffer_s, buffer_a, buffer_r = [], [], []
+            if done:
+                break
+            s = s_
+            step += 1
+    return r_sum
 
 class EvolutionManager(object):
     
@@ -85,31 +89,20 @@ class EvolutionManager(object):
             evaluate_net = EvaluateNet(o_dim, s_dim, a_dim)
             evaluate_net.share_memory()
             self.nets.append(evaluate_net)
-    
-    def generation_forward(self):
-        pass
 
-    def mutate(self):
-        pass
-
-    def __call__(self, inputs, chunksize=1):
-        """Process the inputs.
-        
-        inputs
-          models/env_name/epochs.
-        
-        chunksize=1
-          The portion of the input data to hand to each worker.
-        """
+    def __call__(self, generation_forward_fn, evolution_net_mutate, chunksize=1):
         # rewards should contain the individual_name model_index and rewards
-        step_results = self.pool.map(self.generation_forward, inputs, chunksize=chunksize)
+        # TODO
+        policy_net, evolution_net, env, steps
+        step_results = self.pool.map(generation_forward_fn, inputs, chunksize=chunksize)
         # Rank the resualt
+        # TODO
         results = rank(results)
         mutate_results = self.pool.map(self.mutate, results)
 
 def main(args):
     em = EvolutionManager(args)
-    em()
+    em(generation_forward, evolution_net_mutate)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
