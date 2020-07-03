@@ -13,9 +13,9 @@ def layer_init(layers):
         nn.init.constant_(layer.bias, 0.)
 
 
-class PolicyNet(nn.Module):
+class EvaluateNet(nn.Module):
     def __init__(self, o_dim, s_dim, a_dim):
-        super(PolicyNet, self).__init__()
+        super(EvaluateNet, self).__init__()
         self.o_dim = o_dim
         self.s_dim = s_dim
         self.a_dim = a_dim
@@ -29,9 +29,9 @@ class PolicyNet(nn.Module):
         lr = torch.tanh(lr)
         return lr
 
-class EvaluateNet(nn.Module):
+class PolicyNet(nn.Module):
     def __init__(self, o_dim, s_dim, a_dim):
-        super(EvaluateNet, self).__init__()
+        super(PolicyNet, self).__init__()
         self.o_dim = o_dim
         self.s_dim = s_dim
         self.a_dim = a_dim

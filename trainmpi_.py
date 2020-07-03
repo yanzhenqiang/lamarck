@@ -13,7 +13,7 @@ import time
 
 from mpi4py import MPI
 
-from .model import PopulationManager, Task
+from model import PopulationManager, Task
 
 
 def mpi_fork(n):
